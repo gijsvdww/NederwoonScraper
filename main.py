@@ -9,13 +9,30 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = "8320757090"
 NEDERWOON_URL = "https://www.nederwoon.nl/search?search_type=1&city=arnhem+"
 
-sent_objects = set()
+send_objects = set()
+
+
+def send_notification(message: str):
+    print("notificatie")
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": message}
+    r = requests.post(url, data=payload)
+    return r.json()
+
+def send_locations(lat: int, lon: int):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendLocation"
+    payload = {"chat_id": CHAT_ID, "latitude": lat, "longitude": lon}
+    requests.post(url, data=payload)
+
+def send_pictures(pic_url: str):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+    payload = {"chat_id": CHAT_ID, "photo": pic_url}
+    requests.post(url, data=payload)
+
 
 def getNieuweWoningen():
     r = requests.get(NEDERWOON_URL)
     soup = BeautifulSoup(r.text, 'html.parser')
-
-    print(soup)
 
     woningen = []
 
@@ -56,7 +73,7 @@ def getNieuweWoningen():
             "link": link
         })
 
-    nieuwe_woning = [obj for obj in woningen if obj['url'] not in sent_objects]
+    nieuwe_woning = [obj for obj in woningen if obj['link'] not in send_objects]
     return nieuwe_woning
 
 def verstuurBericht(woning):
@@ -65,27 +82,12 @@ def verstuurBericht(woning):
         send_pictures("nederwoon.nl" + img)
 
 def mainLoop():
-    nieuweWoningen = getNieuweWoningen()
-    for woning in nieuweWoningen:
-        verstuurBericht(woning)
-    time.sleep(20)
+    while True:
+        nieuweWoningen = getNieuweWoningen()
+        for woning in nieuweWoningen:
+            verstuurBericht(woning)
+            send_objects.add(woning['link'])
+        time.sleep(20)
 
 if __name__ == "__main__":
     mainLoop()
-
-
-def send_notification(message: str):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message}
-    r = requests.post(url, data=payload)
-    return r.json()
-
-def send_locations(lat: int, lon: int):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendLocation"
-    payload = {"chat_id": CHAT_ID, "latitude": lat, "longitude": lon}
-    requests.post(url, data=payload)
-
-def send_pictures(pic_url: str):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    payload = {"chat_id": CHAT_ID, "photo": pic_url}
-    requests.post(url, data=payload)
