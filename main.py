@@ -5,7 +5,7 @@ import requests,re
 from bs4 import BeautifulSoup
 
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN_ENV")
 CHAT_ID = "8320757090"
 NEDERWOON_URL = "https://www.nederwoon.nl/search?search_type=1&city=arnhem+"
 
