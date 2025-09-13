@@ -3,11 +3,14 @@ import time
 
 import requests,re
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
-
+load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN_ENV")
 CHAT_ID = "8320757090"
 NEDERWOON_URL = "https://www.nederwoon.nl/search?search_type=1&city=arnhem+"
+
+print(BOT_TOKEN)
 
 send_objects = set()
 
@@ -83,8 +86,10 @@ def verstuurBericht(woning):
 
 def mainLoop():
     while True:
+        print("checking...", flush=True)
         nieuweWoningen = getNieuweWoningen()
         for woning in nieuweWoningen:
+            print("woning gevonden, berichten worden verstuurd.....", flush=True)
             verstuurBericht(woning)
             send_objects.add(woning['link'])
         time.sleep(20)
