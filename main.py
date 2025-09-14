@@ -5,10 +5,11 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN_ENV")
-CHAT_ID = "8320757090"
-NEDERWOON_URL = "https://www.nederwoon.nl/search?search_type=1&city=arnhem+"
 
+BOT_TOKEN = os.getenv("BOT_TOKEN_ENV")
+CHAT_ID = os.getenv("CHAT_ID")
+NEDERWOON_URL = os.getenv("NEDERWOON_URL")
+HEARTBEAT_URL = os.getenv("HEARTBEAT_URL")
 SENT_FILE= "send.json"
 
 def load_send():
@@ -16,9 +17,9 @@ def load_send():
         with open(SENT_FILE, "r") as f:
             return set(json.load(f))
 
-def save_sent(send_objects):
+def save_sent(sent_objects):
     with open(SENT_FILE, "w") as f:
-        json.dump(list(send_objects), f)
+        json.dump(list(sent_objects), f)
 
 
 def send_notification(message: str):
@@ -39,7 +40,7 @@ def send_pictures(pic_url: str):
     requests.post(url, data=payload)
 
 
-def getNieuweWoningen(send_objects):
+def getNieuweWoningen(sent_objects):
     r = requests.get(NEDERWOON_URL)
     soup = BeautifulSoup(r.text, 'html.parser')
 
@@ -67,7 +68,7 @@ def getNieuweWoningen(send_objects):
             if img.get("data-src") or img.get("src")
         ]
 
-        # Detail link (optioneel: neem eerste <a> in het blok)
+        # Detail link
         link = None
         a_tag = loc.select_one("a[href]")
         if a_tag:
@@ -82,7 +83,7 @@ def getNieuweWoningen(send_objects):
             "link": link
         })
 
-    nieuwe_woning = [obj for obj in woningen if obj['link'] not in send_objects]
+    nieuwe_woning = [obj for obj in woningen if obj['link'] not in sent_objects]
     return nieuwe_woning
 
 def verstuurBericht(woning):
@@ -105,7 +106,7 @@ def mainLoop():
                 verstuurBericht(woning)
                 sent_objects.add(woning['link'])
                 save_sent(sent_objects)
-            requests.get("https://hc-ping.com/b8b5db0a-75a5-4093-aa68-9f38f505374a")
+            requests.get(HEARTBEAT_URL)
             print("heartbeat")
             time.sleep(20)
         except Exception as e:
