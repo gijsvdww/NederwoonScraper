@@ -8,7 +8,7 @@ Daarnaast is er een heartbeat toegevoegd waarmee je eenvoudig kunt monitoren of 
 ---
 
 ## 🚀 Functionaliteit
-- Scrapen van nieuwe woningen via Nederwoon.
+- Scrapen van nieuwe woningen via Nederwoon, dit kan op basis van elk filter zijn.
 - Verzenden van notificaties naar een Telegram-chat (inclusief adres, type, prijs, link en afbeeldingen).
 - Bijhouden van reeds verstuurde woningen in een lokaal JSON-bestand (`send.json`).
 - Heartbeat call naar een externe URL om uptime te monitoren.
@@ -53,7 +53,7 @@ Maak een bestand `.env` in de root van je project met daarin:
 ```
 BOT_TOKEN_ENV=plak_hier_je_telegram_bot_token
 CHAT_ID=plak_hier_je_chat_id
-NEDERWOON_URL=https://www.nederwoon.nl/search?search_type=1&city=arnhem+
+NEDERWOON_URL=https://www.nederwoon.nl/search?search_type=1&city=arnhem+ (kopieer de link met de juiste filters op stad, prijs etc)
 HEARTBEAT_URL=https://uptime-kuma-of-andere-url
 ```
 
