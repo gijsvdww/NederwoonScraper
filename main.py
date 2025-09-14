@@ -11,7 +11,6 @@ NEDERWOON_URL = "https://www.nederwoon.nl/search?search_type=1&city=arnhem+"
 
 print(BOT_TOKEN)
 
-send_objects = set()
 
 SENT_FILE= "send.json"
 
@@ -20,7 +19,7 @@ def load_send():
         with open(SENT_FILE, "r") as f:
             return set(json.load(f))
 
-def save_sent(sent_objects):
+def save_sent(send_objects):
     with open(SENT_FILE, "w") as f:
         json.dump(list(send_objects), f)
 
@@ -43,7 +42,7 @@ def send_pictures(pic_url: str):
     requests.post(url, data=payload)
 
 
-def getNieuweWoningen():
+def getNieuweWoningen(send_objects):
     r = requests.get(NEDERWOON_URL)
     soup = BeautifulSoup(r.text, 'html.parser')
 
@@ -95,14 +94,18 @@ def verstuurBericht(woning):
         send_pictures("nederwoon.nl" + img)
 
 def mainLoop():
-    sent_objects = load_send()
+    sent_objects = set()
+    try:
+        sent_objects = load_send()
+    except:
+        print("no sent objects found yet")
     while True:
         print("checking...", flush=True)
-        nieuweWoningen = getNieuweWoningen()
+        nieuweWoningen = getNieuweWoningen(sent_objects)
         for woning in nieuweWoningen:
             print("woning gevonden, berichten worden verstuurd.....", flush=True)
             verstuurBericht(woning)
-            send_objects.add(woning['link'])
+            sent_objects.add(woning['link'])
             save_sent(sent_objects)
         time.sleep(20)
 
