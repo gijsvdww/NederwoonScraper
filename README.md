@@ -29,7 +29,7 @@ Daarnaast is er een heartbeat toegevoegd waarmee je eenvoudig kunt monitoren of 
 
 ### 1. Repo clonen
 ```bash
-git clone git@github.com:jouw-gebruikersnaam/nederwoonScraper.git
+git clone git@github.com:gijsvdww/nederwoonScraper.git
 cd nederwoonScraper
 ````
 
