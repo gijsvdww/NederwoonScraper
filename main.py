@@ -1,6 +1,5 @@
-import os
+import os,json
 import time
-
 import requests,re
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -13,6 +12,17 @@ NEDERWOON_URL = "https://www.nederwoon.nl/search?search_type=1&city=arnhem+"
 print(BOT_TOKEN)
 
 send_objects = set()
+
+SENT_FILE= "send.json"
+
+def load_send():
+    if os.path.exists(SENT_FILE):
+        with open(SENT_FILE, "r") as f:
+            return set(json.load(f))
+
+def save_sent(sent_objects):
+    with open(SENT_FILE, "w") as f:
+        json.dump(list(send_objects), f)
 
 
 def send_notification(message: str):
@@ -85,6 +95,7 @@ def verstuurBericht(woning):
         send_pictures("nederwoon.nl" + img)
 
 def mainLoop():
+    sent_objects = load_send()
     while True:
         print("checking...", flush=True)
         nieuweWoningen = getNieuweWoningen()
@@ -92,6 +103,7 @@ def mainLoop():
             print("woning gevonden, berichten worden verstuurd.....", flush=True)
             verstuurBericht(woning)
             send_objects.add(woning['link'])
+            save_sent(sent_objects)
         time.sleep(20)
 
 if __name__ == "__main__":

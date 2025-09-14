@@ -1,3 +1,6 @@
 requests
 re
 beautifulsoup4
+os
+time
+load_dotenv
