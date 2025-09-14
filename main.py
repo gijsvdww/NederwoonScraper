@@ -97,14 +97,20 @@ def mainLoop():
     except:
         print("no sent objects found yet")
     while True:
-        print("checking...", flush=True)
-        nieuweWoningen = getNieuweWoningen(sent_objects)
-        for woning in nieuweWoningen:
-            print("woning gevonden, berichten worden verstuurd.....", flush=True)
-            verstuurBericht(woning)
-            sent_objects.add(woning['link'])
-            save_sent(sent_objects)
-        time.sleep(20)
+        try:
+            print("checking...", flush=True)
+            nieuweWoningen = getNieuweWoningen(sent_objects)
+            for woning in nieuweWoningen:
+                print("woning gevonden, berichten worden verstuurd.....", flush=True)
+                verstuurBericht(woning)
+                sent_objects.add(woning['link'])
+                save_sent(sent_objects)
+            requests.get("https://hc-ping.com/b8b5db0a-75a5-4093-aa68-9f38f505374a")
+            print("heartbeat")
+            time.sleep(20)
+        except Exception as e:
+            verstuurBericht(f"error in loop: {e}, restarting...")
+            raise
 
 if __name__ == "__main__":
     mainLoop()
