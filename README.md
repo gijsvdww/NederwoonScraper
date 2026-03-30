@@ -108,7 +108,6 @@ Het bestand `start_bot.sh` (staat al in de repo) zorgt dat de juiste virtual env
 ```bash
 #!/bin/bash
 source /root/NederwoonScraper/bot-env/bin/activate
-exec /root/NederwoonScraper/bot-env/bin/python /root/NederwoonScraper/main.py
 ```
 
 Zorg dat het uitvoerbaar is:
