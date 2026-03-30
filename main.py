@@ -1,6 +1,6 @@
-import os,json
+import os, json
 import time
-import requests,re
+import requests, re
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
@@ -10,15 +10,30 @@ BOT_TOKEN = os.getenv("BOT_TOKEN_ENV")
 CHAT_ID = os.getenv("CHAT_ID")
 NEDERWOON_URL = os.getenv("NEDERWOON_URL")
 HEARTBEAT_URL = os.getenv("HEARTBEAT_URL")
-SENT_FILE= "send.json"
+SENT_FILE = "send.json"
+BEZICHT_FILE = "bezicht.json"
 
-def load_send():
-    if os.path.exists(SENT_FILE):
-        with open(SENT_FILE, "r") as f:
-            return set(json.load(f))
+
+def load_json_set(filepath: str) -> set:
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r") as f:
+                content = f.read().strip()
+                if not content:
+                    return set()
+                return set(json.loads(content))
+        except json.JSONDecodeError:
+            print(f"{filepath} corrupt, starting fresh")
+            return set()
+    return set()
+
 
 def save_sent(sent_objects):
     with open(SENT_FILE, "w") as f:
+        json.dump(list(sent_objects), f)
+
+def save_sent_bezichtiging(sent_objects):
+    with open(BEZICHT_FILE, "w") as f:
         json.dump(list(sent_objects), f)
 
 
@@ -29,10 +44,12 @@ def send_notification(message: str):
     r = requests.post(url, data=payload)
     return r.json()
 
+
 def send_locations(lat: int, lon: int):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendLocation"
     payload = {"chat_id": CHAT_ID, "latitude": lat, "longitude": lon}
     requests.post(url, data=payload)
+
 
 def send_pictures(pic_url: str):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
@@ -40,78 +57,113 @@ def send_pictures(pic_url: str):
     requests.post(url, data=payload)
 
 
-def getNieuweWoningen(sent_objects):
+def getNieuweWoningen(sent_objects, bezicht_objects):
     r = requests.get(NEDERWOON_URL)
     soup = BeautifulSoup(r.text, 'html.parser')
 
     woningen = []
 
     for loc in soup.select("div.location"):
-        # Adres
         adres = loc.select_one("p.color-medium.fixed-lh")
         adres = adres.get_text(strip=True) if adres else None
 
-        # Type
         object_type = loc.select_one("p.color-primary.fixed-lh")
         object_type = object_type.get_text(strip=True) if object_type else None
 
-        # Prijs
         prijs = loc.select_one("p.heading-md.text-regular.color-primary")
-        if prijs:
-            raw = prijs.get_text(strip=True)
+        raw = prijs.get_text(strip=True) if prijs else "0"
         prijs = re.sub(r"[^\d,€]", "", raw)
 
-        # Afbeeldingen
         afbeeldingen = [
             img.get("data-src") or img.get("src")
             for img in loc.select(".slider img")
             if img.get("data-src") or img.get("src")
         ]
 
-        # Detail link
         link = None
         a_tag = loc.select_one("a[href]")
         if a_tag:
-            link = a_tag["href"]
-            link = "nederwoon.nl" + link
+            link = "nederwoon.nl" + a_tag["href"]
 
-        woningen.append({
-            "adres": adres,
-            "type": object_type,
-            "prijs": prijs,
-            "afbeeldingen": afbeeldingen,
-            "link": link
-        })
+        cleaned = re.sub(r'[^\d,]', '', prijs)
+        cleaned = cleaned.replace(',', '.')
 
-    nieuwe_woning = [obj for obj in woningen if obj['link'] not in sent_objects]
-    return nieuwe_woning
+        bezichtiging_tag = loc.select_one("p.color-tertiary")
+        bezichtiging = not (
+                bezichtiging_tag and
+                "Er staat geen bezichtiging gepland" in bezichtiging_tag.get_text()
+        )
 
-def verstuurBericht(woning):
-    send_notification(f"LET OP!! Er is een nieuwe woning!\nAdres: {woning['adres']}\ntype: {woning['type']}\nprijs: {woning['prijs']}\nlink: {woning['link']}")
+        if cleaned and float(cleaned) < 1300:
+            woningen.append({
+                "adres": adres,
+                "type": object_type,
+                "prijs": prijs,
+                "afbeeldingen": afbeeldingen,
+                "link": link,
+                "bezichtiging": bezichtiging
+            })
+
+    nieuwe_woningen = [obj for obj in woningen if obj['link'] not in sent_objects]
+    nieuwe_bezichtigingen = [obj for obj in woningen if obj['link'] not in bezicht_objects and obj['bezichtiging']]
+
+
+    return nieuwe_woningen, nieuwe_bezichtigingen
+
+def verstuurBezichtigingBericht(woning: dict):
+    send_notification(
+        f"LET OP!! Er is een bezichtiging ingepland!\n"
+        f"Adres: {woning['adres']}\n"
+        f"Type: {woning['type']}\n"
+        f"Prijs: {woning['prijs']}\n"
+        f"Link: {woning['link']}"
+    )
+
+
+def verstuurBericht(woning: dict):
+    bezichtiging = "nee"
+    if woning['bezichtiging']:
+        bezichtiging = " ja"
+    else:
+        bezichteging = "nee"
+
+    send_notification(
+        f"LET OP!! Er is een nieuwe woning!\n"
+        f"Adres: {woning['adres']}\n"
+        f"Type: {woning['type']}\n"
+        f"Prijs: {woning['prijs']}\n"
+        f"Link: {woning['link']}\n"
+        f"Bezichtiging gepland: {bezichtiging}"
+    )
     for img in woning['afbeeldingen']:
-        send_pictures("nederwoon.nl" + img)
+        send_pictures(img)
+
 
 def mainLoop():
-    sent_objects = set()
-    try:
-        sent_objects = load_send()
-    except:
-        print("no sent objects found yet")
+    sent_objects = load_json_set(SENT_FILE)
+    bezicht_objects = load_json_set(BEZICHT_FILE)
+
     while True:
         try:
             print("checking...", flush=True)
-            nieuweWoningen = getNieuweWoningen(sent_objects)
+            nieuweWoningen, nieuweBezichtigingen = getNieuweWoningen(sent_objects, bezicht_objects)
             for woning in nieuweWoningen:
                 print("woning gevonden, berichten worden verstuurd.....", flush=True)
                 verstuurBericht(woning)
                 sent_objects.add(woning['link'])
                 save_sent(sent_objects)
+            for woning in nieuweBezichtigingen:
+                print("bezichtiging gevonden, berichten worden verstuurd.....", flush=True)
+                verstuurBezichtigingBericht(woning)
+                bezicht_objects.add(woning['link'])
+                save_sent_bezichtiging(bezicht_objects)
             requests.get(HEARTBEAT_URL)
-            print("heartbeat")
+            print("heartbeat", flush=True)
             time.sleep(20)
         except Exception as e:
-            verstuurBericht(f"error in loop: {e}, restarting...")
+            send_notification(f"error in loop: {e}, restarting...")
             raise
+
 
 if __name__ == "__main__":
     mainLoop()
