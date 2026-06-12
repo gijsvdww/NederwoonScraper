@@ -37,28 +37,34 @@ def save_sent_bezichtiging(sent_objects):
         json.dump(list(sent_objects), f)
 
 
-def send_notification(message: str):
-    print("notificatie")
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message}
-    r = requests.post(url, data=payload)
+def telegram_post(method: str, payload: dict):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
+    r = requests.post(url, data=payload, timeout=10)
+    if r.status_code == 429:
+        retry_after = r.json().get("parameters", {}).get("retry_after", 5)
+        print(f"telegram rate limit, {retry_after}s wachten...", flush=True)
+        time.sleep(retry_after)
+        r = requests.post(url, data=payload, timeout=10)
+    if not r.ok:
+        raise RuntimeError(f"telegram {method} mislukt: {r.status_code} {r.text}")
     return r.json()
 
 
+def send_notification(message: str):
+    print("notificatie")
+    return telegram_post("sendMessage", {"chat_id": CHAT_ID, "text": message})
+
+
 def send_locations(lat: int, lon: int):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendLocation"
-    payload = {"chat_id": CHAT_ID, "latitude": lat, "longitude": lon}
-    requests.post(url, data=payload)
+    telegram_post("sendLocation", {"chat_id": CHAT_ID, "latitude": lat, "longitude": lon})
 
 
 def send_pictures(pic_url: str):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    payload = {"chat_id": CHAT_ID, "photo": pic_url}
-    requests.post(url, data=payload)
+    telegram_post("sendPhoto", {"chat_id": CHAT_ID, "photo": pic_url})
 
 
 def getNieuweWoningen(sent_objects, bezicht_objects):
-    r = requests.get(NEDERWOON_URL)
+    r = requests.get(NEDERWOON_URL, timeout=15)
     soup = BeautifulSoup(r.text, 'html.parser')
 
     woningen = []
@@ -70,8 +76,10 @@ def getNieuweWoningen(sent_objects, bezicht_objects):
         object_type = loc.select_one("p.color-primary.fixed-lh")
         object_type = object_type.get_text(strip=True) if object_type else None
 
-        prijs = loc.select_one("p.heading-md.text-regular.color-primary")
-        raw = prijs.get_text(strip=True) if prijs else "0"
+        prijs_tag = loc.select_one("p.heading-md.text-regular.color-primary")
+        if not prijs_tag:
+            continue
+        raw = prijs_tag.get_text(strip=True)
         prijs = re.sub(r"[^\d,€]", "", raw)
 
         afbeeldingen = [
@@ -80,13 +88,16 @@ def getNieuweWoningen(sent_objects, bezicht_objects):
             if img.get("data-src") or img.get("src")
         ]
 
-        link = None
         a_tag = loc.select_one("a[href]")
-        if a_tag:
-            link = "nederwoon.nl" + a_tag["href"]
+        if not a_tag:
+            continue
+        link = "nederwoon.nl" + a_tag["href"]
 
-        cleaned = re.sub(r'[^\d,]', '', prijs)
-        cleaned = cleaned.replace(',', '.')
+        cleaned = re.sub(r'[^\d,]', '', raw).replace(',', '.')
+        try:
+            prijs_num = float(cleaned)
+        except ValueError:
+            continue
 
         bezichtiging_tag = loc.select_one("p.color-tertiary")
         bezichtiging = not (
@@ -94,7 +105,7 @@ def getNieuweWoningen(sent_objects, bezicht_objects):
                 "Er staat geen bezichtiging gepland" in bezichtiging_tag.get_text()
         )
 
-        if cleaned and float(cleaned) < 1001:
+        if prijs_num < 1001:
             woningen.append({
                 "adres": adres,
                 "type": object_type,
@@ -121,11 +132,7 @@ def verstuurBezichtigingBericht(woning: dict):
 
 
 def verstuurBericht(woning: dict):
-    bezichtiging = "nee"
-    if woning['bezichtiging']:
-        bezichtiging = " ja"
-    else:
-        bezichteging = "nee"
+    bezichtiging = "ja" if woning['bezichtiging'] else "nee"
 
     send_notification(
         f"LET OP!! Er is een nieuwe woning!\n"
@@ -135,8 +142,15 @@ def verstuurBericht(woning: dict):
         f"Link: {woning['link']}\n"
         f"Bezichtiging gepland: {bezichtiging}"
     )
+
+
+def verstuurFotos(woning: dict):
     for img in woning['afbeeldingen']:
-        send_pictures(img)
+        try:
+            send_pictures(img)
+        except Exception as e:
+            print(f"foto versturen mislukt ({img}): {e}", flush=True)
+        time.sleep(1)
 
 
 def mainLoop():
@@ -149,20 +163,33 @@ def mainLoop():
             nieuweWoningen, nieuweBezichtigingen = getNieuweWoningen(sent_objects, bezicht_objects)
             for woning in nieuweWoningen:
                 print("woning gevonden, berichten worden verstuurd.....", flush=True)
-                verstuurBericht(woning)
+                try:
+                    verstuurBericht(woning)
+                except Exception as e:
+                    print(f"bericht versturen mislukt ({woning['link']}): {e}", flush=True)
+                    continue
                 sent_objects.add(woning['link'])
                 save_sent(sent_objects)
+                verstuurFotos(woning)
             for woning in nieuweBezichtigingen:
                 print("bezichtiging gevonden, berichten worden verstuurd.....", flush=True)
-                verstuurBezichtigingBericht(woning)
+                try:
+                    verstuurBezichtigingBericht(woning)
+                except Exception as e:
+                    print(f"bezichtigingsbericht versturen mislukt ({woning['link']}): {e}", flush=True)
+                    continue
                 bezicht_objects.add(woning['link'])
                 save_sent_bezichtiging(bezicht_objects)
-            requests.get(HEARTBEAT_URL)
+            requests.get(HEARTBEAT_URL, timeout=10)
             print("heartbeat", flush=True)
             time.sleep(20)
         except Exception as e:
-            send_notification(f"error in loop: {e}, restarting...")
-            raise
+            print(f"error in loop: {e}", flush=True)
+            try:
+                send_notification(f"error in loop: {e}")
+            except Exception:
+                pass
+            time.sleep(60)
 
 
 if __name__ == "__main__":
