@@ -94,7 +94,7 @@ def getNieuweWoningen(sent_objects, bezicht_objects):
                 "Er staat geen bezichtiging gepland" in bezichtiging_tag.get_text()
         )
 
-        if cleaned and float(cleaned) < 1300:
+        if cleaned and float(cleaned) < 1001:
             woningen.append({
                 "adres": adres,
                 "type": object_type,
