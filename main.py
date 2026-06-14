@@ -185,10 +185,6 @@ def mainLoop():
             time.sleep(20)
         except Exception as e:
             print(f"error in loop: {e}", flush=True)
-            try:
-                send_notification(f"error in loop: {e}")
-            except Exception:
-                pass
             time.sleep(60)
 
 
